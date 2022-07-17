@@ -1,0 +1,75 @@
+SELECT * 
+FROM coviddeaths
+ORDER BY 3, 4
+
+SELECT * 
+FROM covidvaccinations
+ORDER BY 3, 4
+
+SELECT location, date, total_cases, new_cases, total_deaths, population 
+FROM coviddeaths
+ORDER BY 1, 2
+
+--Total Cases vs Total Deaths
+--Likelihood of dying if you contract covid in your country
+SELECT location, date, total_cases, total_deaths, (total_deaths::NUMERIC/total_cases::NUMERIC)*100 AS DeathPercentage
+FROM coviddeaths
+WHERE location LIKE '%Singapore%'
+ORDER BY 1, 2
+
+--Total Cases vs Population
+--Percentage of Population got Covid
+SELECT location, date, total_cases, population, (total_cases::NUMERIC/population::NUMERIC)*100 AS PercentPopulationInfected
+FROM coviddeaths
+WHERE location LIKE '%Singapore%'
+ORDER BY 1, 2
+
+--Countries with highest infection rate compared to population
+SELECT location, population, MAX(total_cases) AS HighestInfectionCount,  
+	MAX((total_cases::NUMERIC/population::NUMERIC))*100 AS PercentPopulationInfected
+FROM coviddeaths
+GROUP BY location, population
+ORDER BY PercentPopulationInfected DESC
+
+--Countries with highest death count per population
+SELECT location, MAX(total_deaths) AS TotalDeathCount
+FROM coviddeaths
+WHERE continent IS NOT NULL
+GROUP BY location
+ORDER BY TotalDeathCount DESC
+
+--Continents with highest death count
+SELECT continent, MAX(total_deaths) AS TotalDeathCount
+FROM coviddeaths
+WHERE continent IS NOT NULL
+GROUP BY continent
+ORDER BY TotalDeathCount DESC
+
+--Global Numbers
+SELECT SUM(new_cases::NUMERIC) AS TotalCases, SUM(new_deaths::NUMERIC) AS TotalDeaths, 
+(SUM(new_deaths::NUMERIC)/SUM(new_cases::NUMERIC))*100 AS DeathPercentage
+FROM coviddeaths
+WHERE continent IS NOT NULL
+ORDER BY 1, 2
+
+--Total Population vs Covid Vaccinations
+With PopvsVac (continent, location, date, population, new_vaccinations, RollingPeopleVaccinated)
+as (
+SELECT cd.continent, cd.location, cd.date, cd.population, cv.new_vaccinations,
+SUM(new_vaccinations) OVER (PARTITION BY cd.location ORDER BY cd.location, cd.date) AS RollingPeopleVaccinated
+FROM coviddeaths cd JOIN covidvaccinations cv
+ON cd.location = cv.location 
+AND cd.date = cv.date
+WHERE cd.continent IS NOT NULL
+)
+SELECT *, (RollingPeopleVaccinated/population)*100
+FROM PopvsVac
+
+--Creating View
+Create View PercentPopulationVaccinated as 
+SELECT cd.continent, cd.location, cd.date, cd.population, cv.new_vaccinations,
+SUM(new_vaccinations) OVER (PARTITION BY cd.location ORDER BY cd.location, cd.date) AS RollingPeopleVaccinated
+FROM coviddeaths cd JOIN covidvaccinations cv
+ON cd.location = cv.location 
+AND cd.date = cv.date
+WHERE cd.continent IS NOT NULL
